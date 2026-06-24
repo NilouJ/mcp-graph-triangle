@@ -1,0 +1,7 @@
+strands-agents
+strands-agents-tools
+mcp
+mcp-lambda
+boto3
+botocore
+anthropic[bedrock]

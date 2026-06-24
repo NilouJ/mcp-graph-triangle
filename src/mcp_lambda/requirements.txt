@@ -1,0 +1,4 @@
+mcp
+mcp-lambda
+awslabs.amazon-neptune-mcp-server
+boto3
