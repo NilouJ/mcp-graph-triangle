@@ -4,7 +4,7 @@ Description: MCP Graph Triangle - Strands Agent, API Lambda, MCP Lambda, Neptune
 
 Globals:
   Function:
-    Runtime: python3.9
+    Runtime: python3.12
     Timeout: 30
     MemorySize: 512
     Architectures:
@@ -130,8 +130,7 @@ Resources:
           - !Ref PrivateSubnetB
       Environment:
         Variables:
-          NEPTUNE_ENDPOINT: !GetAtt NeptuneCluster.Endpoint
-          NEPTUNE_PORT: "8182"
+          NEPTUNE_HTTP_ENDPOINT: !Sub "https://${NeptuneCluster.Endpoint}:8182/gremlin"
 
   # ── MCP Lambda (inside VPC) ────────────────────────────
   McpLambda:
