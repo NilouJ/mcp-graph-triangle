@@ -1,0 +1,166 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: MCP Graph Triangle - Strands Agent, API Lambda, MCP Lambda, Neptune
+
+Globals:
+  Function:
+    Runtime: python3.9
+    Timeout: 30
+    MemorySize: 512
+    Architectures:
+      - arm64
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: mcp-graph-triangle
+
+Resources:
+
+  # ── VPC ────────────────────────────────────────────────
+  GraphVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.20.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref GraphVpc
+      CidrBlock: 10.20.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref GraphVpc
+      CidrBlock: 10.20.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+
+  # ── Security Groups ────────────────────────────────────
+  VpcLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Shared SG for API and MCP Lambdas inside VPC
+      VpcId: !Ref GraphVpc
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 8182
+          ToPort: 8182
+          DestinationSecurityGroupId: !Ref NeptuneSecurityGroup
+
+  NeptuneSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Neptune SG
+      VpcId: !Ref GraphVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8182
+          ToPort: 8182
+          SourceSecurityGroupId: !Ref VpcLambdaSecurityGroup
+
+  # ── Neptune ────────────────────────────────────────────
+  NeptuneSubnetGroup:
+    Type: AWS::Neptune::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Neptune private subnets
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+
+  NeptuneCluster:
+    Type: AWS::Neptune::DBCluster
+    Properties:
+      DBSubnetGroupName: !Ref NeptuneSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref NeptuneSecurityGroup
+      Port: 8182
+      StorageEncrypted: true
+
+  NeptuneInstance:
+    Type: AWS::Neptune::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref NeptuneCluster
+      DBInstanceClass: db.t3.medium
+
+  # ── API Gateway ─────────────────────────────────────────
+  GraphApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: dev
+
+  # ── Strands Agent Lambda (outside VPC) ─────────────────
+  StrandsAgentLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: mcp-strands-agent
+      CodeUri: src/strands_agent/
+      Handler: app.lambda_handler
+      Timeout: 60
+      Role: arn:aws:iam::117134819170:role/Bedrock-LambdaRolejp
+      Environment:
+        Variables:
+          API_LAMBDA_NAME: !Ref ApiLambda
+          MCP_LAMBDA_NAME: !Ref McpLambda
+      Events:
+        AgentEndpoint:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GraphApi
+            Path: /agent/invoke
+            Method: POST
+
+  # ── API Lambda (inside VPC) ────────────────────────────
+  ApiLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: mcp-api-lambda
+      CodeUri: src/api_lambda/
+      Handler: app.lambda_handler
+      Timeout: 60
+      Role: arn:aws:iam::117134819170:role/Bedrock-LambdaRolejp
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref VpcLambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnetA
+          - !Ref PrivateSubnetB
+      Environment:
+        Variables:
+          NEPTUNE_ENDPOINT: !GetAtt NeptuneCluster.Endpoint
+          NEPTUNE_PORT: "8182"
+
+  # ── MCP Lambda (inside VPC) ────────────────────────────
+  McpLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: mcp-mcp-lambda
+      CodeUri: src/mcp_lambda/
+      Handler: app.lambda_handler
+      Timeout: 60
+      Role: arn:aws:iam::117134819170:role/Bedrock-LambdaRolejp
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref VpcLambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnetA
+          - !Ref PrivateSubnetB
+      Environment:
+        Variables:
+          NEPTUNE_ENDPOINT: !GetAtt NeptuneCluster.Endpoint
+          NEPTUNE_PORT: "8182"
+
+Outputs:
+  ApiUrl:
+    Value: !Sub "https://${GraphApi}.execute-api.${AWS::Region}.amazonaws.com/dev/agent/invoke"
+  NeptuneEndpoint:
+    Value: !GetAtt NeptuneCluster.Endpoint
+  StrandsAgentLambdaName:
+    Value: !Ref StrandsAgentLambda
+  ApiLambdaName:
+    Value: !Ref ApiLambda
+  McpLambdaName:
+    Value: !Ref McpLambda
