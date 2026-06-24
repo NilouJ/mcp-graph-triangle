@@ -45,22 +45,30 @@ Resources:
     Properties:
       GroupDescription: Shared SG for API and MCP Lambdas inside VPC
       VpcId: !Ref GraphVpc
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 8182
-          ToPort: 8182
-          DestinationSecurityGroupId: !Ref NeptuneSecurityGroup
 
   NeptuneSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Neptune SG
       VpcId: !Ref GraphVpc
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 8182
-          ToPort: 8182
-          SourceSecurityGroupId: !Ref VpcLambdaSecurityGroup
+
+  VpcLambdaEgressRule:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref VpcLambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8182
+      ToPort: 8182
+      DestinationSecurityGroupId: !Ref NeptuneSecurityGroup
+
+  NeptuneIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref NeptuneSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8182
+      ToPort: 8182
+      SourceSecurityGroupId: !Ref VpcLambdaSecurityGroup
 
   # ── Neptune ────────────────────────────────────────────
   NeptuneSubnetGroup:
