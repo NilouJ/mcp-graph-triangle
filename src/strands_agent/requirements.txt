@@ -1,7 +1,7 @@
 strands-agents
 strands-agents-tools
 mcp
-mcp-lambda
+run-mcp-servers-with-aws-lambda
 boto3
 botocore
 anthropic[bedrock]

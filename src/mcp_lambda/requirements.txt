@@ -1,4 +1,4 @@
 mcp
-mcp-lambda
-awslabs.amazon-neptune-mcp-server
+run-mcp-servers-with-aws-lambda
 boto3
+awslabs.amazon-neptune-mcp-server
