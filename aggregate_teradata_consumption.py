@@ -2,6 +2,7 @@ import csv
 from collections import defaultdict
 from decimal import Decimal
 from pathlib import Path
+from typing import Optional
 
 
 RAW_INPUT_PATH = Path("data/raw-teradata/cba_teradata_dbql_raw.csv")
@@ -13,25 +14,25 @@ PLATFORM = "Teradata"
 CONFIDENCE = "0.95"
 
 
-def clean(value: str | None) -> str:
+def clean(value: Optional[str]) -> str:
     return (value or "").strip()
 
 
-def to_decimal(value: str | None) -> Decimal:
+def to_decimal(value: Optional[str]) -> Decimal:
     value = clean(value)
     if not value:
         return Decimal("0")
     return Decimal(value)
 
 
-def to_int(value: str | None) -> int:
+def to_int(value: Optional[str]) -> int:
     value = clean(value)
     if not value:
         return 0
     return int(float(value))
 
 
-def aggregate(input_path: str | Path, output_path: str | Path) -> None:
+def aggregate(input_path: Path, output_path: Path) -> None:
     input_path = Path(input_path)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
