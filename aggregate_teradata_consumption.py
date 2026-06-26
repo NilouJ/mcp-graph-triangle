@@ -4,8 +4,8 @@ from decimal import Decimal
 from pathlib import Path
 
 
-RAW_INPUT_PATH = Path("data/raw-teradata/consumption.csv")
-AGG_OUTPUT_PATH = Path("data/aggregated-teradata/consumption.csv")
+RAW_INPUT_PATH = Path("data/raw-teradata/cba_teradata_dbql_raw.csv")
+AGG_OUTPUT_PATH = Path("data/aggregated-teradata/consumption-aggregated.csv")
 
 BATCH_ID = "td-dbql-poc-001"
 SOURCE = "Teradata DBQL"
