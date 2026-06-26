@@ -7,7 +7,8 @@ from mcp_lambda import stdio_server_adapter
 
 REGION = os.environ.get("REGION", "ap-southeast-2")
 NEPTUNE_HOST = os.environ["NEPTUNE_ENDPOINT"].strip()
-GRAPH_ENDPOINT = f"neptune-db://{NEPTUNE_HOST}"
+NEPTUNE_PORT = os.environ.get("NEPTUNE_PORT", "8182").strip()
+GRAPH_ENDPOINT = f"neptune-db://{NEPTUNE_HOST}:{NEPTUNE_PORT}"
 
 session = boto3.Session()
 creds = session.get_credentials()
