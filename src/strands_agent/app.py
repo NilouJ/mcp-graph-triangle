@@ -61,9 +61,70 @@ async def test_mcp_connection():
             }
 
 
+async def test_gremlin_write_one_sample():
+    gremlin_query = """
+g.V().has('Application', 'id', 'app_repayment_predictor').fold().
+  coalesce(
+    unfold(),
+    addV('Application').
+      property('id', 'app_repayment_predictor').
+      property('name', 'repayment_predictor').
+      property('type', 'AI_MODEL').
+      property('domain', 'Home_Lending')
+  ).as('app').
+V().has('DataAsset', 'id', 'asset_teradata_dw_gold_nps_summary_mart').fold().
+  coalesce(
+    unfold(),
+    addV('DataAsset').
+      property('id', 'asset_teradata_dw_gold_nps_summary_mart').
+      property('platform', 'Teradata').
+      property('database_name', 'DW_GOLD').
+      property('table_name', 'nps_summary_mart').
+      property('qualified_name', 'Teradata.DW_GOLD.nps_summary_mart').
+      property('zone', 'GOLD')
+  ).as('asset').
+coalesce(
+  __.select('app').outE('CONSUMES').where(inV().has('id', 'asset_teradata_dw_gold_nps_summary_mart')),
+  __.select('app').addE('CONSUMES').to('asset')
+).
+property('source', 'Teradata DBQL').
+property('service_account', 'svc_ai_runner').
+property('query_count', 1).
+property('first_seen', '2025-01-01T08:14:24Z').
+property('last_seen', '2025-01-01T08:14:24Z').
+property('confidence', 0.95).
+property('batch_id', 'td-dbql-poc-001').
+property('chunk_id', 'td-dbql-poc-001-chunk-001')
+"""
+
+    async with lambda_function_client(server_params) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+
+            result = await session.call_tool(
+                "run_gremlin_query",
+                {
+                    "query": gremlin_query
+                },
+            )
+
+            return {
+                "connected": True,
+                "mcp_lambda": FUNCTION_NAME,
+                "tool": "run_gremlin_query",
+                "test": "write_one_sample_consumption_fact",
+                "result": str(result),
+            }
+
+
 def lambda_handler(event, context):
     try:
-        result = asyncio.run(test_mcp_connection())
+        test_name = event.get("test", "list_tools")
+
+        if test_name == "gremlin_write_one_sample":
+            result = asyncio.run(test_gremlin_write_one_sample())
+        else:
+            result = asyncio.run(test_mcp_connection())
 
         print(json.dumps(result, indent=2, default=str))
 
