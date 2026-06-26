@@ -18,7 +18,7 @@ frozen = creds.get_frozen_credentials()
 
 server_params = StdioServerParameters(
     command=sys.executable,
-    args=["/var/task/bin/awslabs.amazon-neptune-mcp-server"],
+    args=["-m", "awslabs.amazon_neptune_mcp_server"],
     env={
         "PYTHONPATH": "/var/task",
         "AWS_REGION": REGION,
