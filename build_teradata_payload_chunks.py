@@ -1,7 +1,7 @@
 import csv
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Union
 
 
 AGG_INPUT_PATH = Path("data/aggregated-teradata/consumption-aggregated.csv")
@@ -13,18 +13,18 @@ SOURCE_SYSTEM = "Teradata DBQL"
 CHUNK_SIZE = 50
 
 
-def clean(value: str | None) -> str:
+def clean(value: Optional[str]) -> str:
     return (value or "").strip()
 
 
-def to_int(value: str | None) -> int:
+def to_int(value: Optional[str]) -> int:
     value = clean(value)
     if not value:
         return 0
     return int(float(value))
 
 
-def to_float(value: str | None) -> float:
+def to_float(value: Optional[str]) -> float:
     value = clean(value)
     if not value:
         return 0.0
@@ -78,7 +78,7 @@ def chunked(items: list[dict[str, Any]], chunk_size: int) -> list[list[dict[str,
     return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
-def build_payload_chunks(input_path: str | Path, output_dir: str | Path) -> None:
+def build_payload_chunks(input_path: Union[str, Path], output_dir: Union[str, Path]) -> None:
     input_path = Path(input_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
