@@ -83,11 +83,10 @@ V().has('DataAsset', 'id', 'asset_teradata_dw_gold_nps_summary_mart').fold().
       property('qualified_name', 'Teradata.DW_GOLD.nps_summary_mart').
       property('zone', 'GOLD')
   ).as('asset').
-select('app').
-  coalesce(
-    outE('CONSUMES').where(inV().has('DataAsset', 'id', 'asset_teradata_dw_gold_nps_summary_mart')),
-    addE('CONSUMES').to('asset')
-  ).
+coalesce(
+  __.select('app').outE('CONSUMES').where(inV().has('DataAsset', 'id', 'asset_teradata_dw_gold_nps_summary_mart')),
+  addE('CONSUMES').from('app').to('asset')
+).
 property('source', 'Teradata DBQL').
 property('service_account', 'svc_ai_runner').
 property('query_count', 1).
