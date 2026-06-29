@@ -4,4 +4,4 @@ mcp
 run-mcp-servers-with-aws-lambda
 boto3
 botocore
-anthropic[bedrock]
+anthropic
