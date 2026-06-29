@@ -86,7 +86,7 @@ V().has('DataAsset', 'id', 'asset_teradata_dw_gold_nps_summary_mart').fold().
 select('app').
   coalesce(
     outE('CONSUMES').where(inV().has('DataAsset', 'id', 'asset_teradata_dw_gold_nps_summary_mart')),
-    addE('CONSUMES').to(select('asset'))
+    addE('CONSUMES').to('asset')
   ).
 property('source', 'Teradata DBQL').
 property('service_account', 'svc_ai_runner').
