@@ -92,7 +92,7 @@ Resources:
     Type: AWS::Neptune::DBInstance
     Properties:
       DBClusterIdentifier: !Ref NeptuneCluster
-      DBInstanceClass: db.t3.medium
+      DBInstanceClass: db.r6g.large
 
   # ── API Gateway ─────────────────────────────────────────
   GraphApi:
