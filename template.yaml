@@ -4,11 +4,11 @@ Description: MCP Graph Triangle - Strands Agent, API Lambda, MCP Lambda, Neptune
 
 Globals:
   Function:
-    Runtime: python3.12
+    Runtime: python3.13
     Timeout: 30
     MemorySize: 512
     Architectures:
-      - arm64
+      - x86_64
 
 Parameters:
   ProjectName:
