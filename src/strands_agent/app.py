@@ -36,7 +36,32 @@ def flatten_exception(exc):
     }
 
 
-async def test_mcp_connection():
+def serialize_mcp_result(result):
+    """
+    MCP tool results are not always directly JSON serializable.
+    Return both a string version and a structured text extraction when available.
+    """
+    output = {
+        "raw": str(result),
+        "is_error": getattr(result, "isError", None),
+        "content": [],
+        "structured_content": getattr(result, "structuredContent", None),
+    }
+
+    content_items = getattr(result, "content", None)
+    if content_items:
+        for item in content_items:
+            output["content"].append(
+                {
+                    "type": getattr(item, "type", None),
+                    "text": getattr(item, "text", None),
+                }
+            )
+
+    return output
+
+
+async def list_mcp_tools():
     async with lambda_function_client(server_params) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
@@ -61,71 +86,140 @@ async def test_mcp_connection():
             }
 
 
-async def test_gremlin_write_one_sample():
-    gremlin_query = """
-g.V().has('Application', 'id', 'app_repayment_predictor').fold().
-  coalesce(
-    unfold(),
-    addV('Application').
-      property('id', 'app_repayment_predictor').
-      property('name', 'repayment_predictor').
-      property('type', 'AI_MODEL').
-      property('domain', 'Home_Lending')
-  ).as('app').
-V().has('DataAsset', 'id', 'asset_teradata_dw_gold_nps_summary_mart').fold().
-  coalesce(
-    unfold(),
-    addV('DataAsset').
-      property('id', 'asset_teradata_dw_gold_nps_summary_mart').
-      property('platform', 'Teradata').
-      property('database_name', 'DW_GOLD').
-      property('table_name', 'nps_summary_mart').
-      property('qualified_name', 'Teradata.DW_GOLD.nps_summary_mart').
-      property('zone', 'GOLD')
-  ).as('asset').
-coalesce(
-  __.select('app').outE('CONSUMES').where(inV().has('DataAsset', 'id', 'asset_teradata_dw_gold_nps_summary_mart')),
-  addE('CONSUMES').from('app').to('asset')
-).
-property('source', 'Teradata DBQL').
-property('service_account', 'svc_ai_runner').
-property('query_count', 1).
-property('first_seen', '2025-01-01T08:14:24Z').
-property('last_seen', '2025-01-01T08:14:24Z').
-property('confidence', 0.95).
-property('batch_id', 'td-dbql-poc-001').
-property('chunk_id', 'td-dbql-poc-001-chunk-001')
-"""
+async def call_mcp_tool(tool_name, arguments=None):
+    if arguments is None:
+        arguments = {}
 
     async with lambda_function_client(server_params) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
 
-            result = await session.call_tool(
-                "run_gremlin_query",
-                {
-                    "query": gremlin_query
-                },
-            )
+            result = await session.call_tool(tool_name, arguments)
 
             return {
                 "connected": True,
                 "mcp_lambda": FUNCTION_NAME,
-                "tool": "run_gremlin_query",
-                "test": "write_one_sample_consumption_fact",
-                "result": str(result),
+                "tool": tool_name,
+                "arguments": arguments,
+                "result": serialize_mcp_result(result),
             }
+
+
+async def run_gremlin_query(query):
+    return await call_mcp_tool(
+        "run_gremlin_query",
+        {
+            "query": query,
+        },
+    )
+
+
+async def run_opencypher_query(query, parameters=None):
+    return await call_mcp_tool(
+        "run_opencypher_query",
+        {
+            "query": query,
+            "parameters": parameters,
+        },
+    )
 
 
 def lambda_handler(event, context):
     try:
+        print("EVENT:")
+        print(json.dumps(event, indent=2, default=str))
+
         test_name = event.get("test", "list_tools")
 
-        if test_name == "gremlin_write_one_sample":
-            result = asyncio.run(test_gremlin_write_one_sample())
-        else:
-            result = asyncio.run(test_mcp_connection())
+        if test_name == "list_tools":
+            result = asyncio.run(list_mcp_tools())
 
+        elif test_name == "graph_status":
+            result = asyncio.run(call_mcp_tool("get_graph_status"))
+
+        elif test_name == "graph_schema":
+            result = asyncio.run(call_mcp_tool("get_graph_schema"))
+
+        elif test_name == "run_gremlin":
+            query = event.get("query")
+
+            if not query:
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps(
+                        {
+                            "error": "Missing required field: query",
+                            "example": {
+                                "test": "run_gremlin",
+                                "query": "g.V().limit(10).valueMap(true)",
+                            },
+                        }
+                    ),
+                }
+
+            result = asyncio.run(run_gremlin_query(query))
+
+        elif test_name == "run_opencypher":
+            query = event.get("query")
+            parameters = event.get("parameters")
+
+            if not query:
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps(
+                        {
+                            "error": "Missing required field: query",
+                            "example": {
+                                "test": "run_opencypher",
+                                "query": "MATCH (n) RETURN n LIMIT 10",
+                                "parameters": {},
+                            },
+                        }
+                    ),
+                }
+
+            result = asyncio.run(run_opencypher_query(query, parameters))
+
+        elif test_name == "call_tool":
+            tool_name = event.get("tool")
+            arguments = event.get("arguments", {})
+
+            if not tool_name:
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps(
+                        {
+                            "error": "Missing required field: tool",
+                            "example": {
+                                "test": "call_tool",
+                                "tool": "get_graph_status",
+                                "arguments": {},
+                            },
+                        }
+                    ),
+                }
+
+            result = asyncio.run(call_mcp_tool(tool_name, arguments))
+
+        else:
+            return {
+                "statusCode": 400,
+                "body": json.dumps(
+                    {
+                        "error": f"Unknown test: {test_name}",
+                        "allowed_tests": [
+                            "list_tools",
+                            "graph_status",
+                            "graph_schema",
+                            "run_gremlin",
+                            "run_opencypher",
+                            "call_tool",
+                        ],
+                    }
+                ),
+            }
+
+        print("RESULT:")
         print(json.dumps(result, indent=2, default=str))
 
         return {
