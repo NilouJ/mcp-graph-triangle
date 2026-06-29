@@ -6,9 +6,17 @@ import traceback
 from mcp import ClientSession
 from mcp_lambda import LambdaFunctionParameters, lambda_function_client
 
+from strands import Agent
+from strands.models import BedrockModel
+from strands.tools.mcp import MCPClient
+
 
 REGION = os.environ.get("AWS_REGION", "ap-southeast-2")
 FUNCTION_NAME = os.environ["MCP_LAMBDA_NAME"]
+BEDROCK_MODEL_ID = os.environ.get(
+    "BEDROCK_MODEL_ID",
+    "anthropic.claude-3-haiku-20240307-v1:0",
+)
 
 os.environ["AWS_REGION"] = REGION
 os.environ["AWS_DEFAULT_REGION"] = REGION
@@ -17,6 +25,25 @@ server_params = LambdaFunctionParameters(
     function_name=FUNCTION_NAME,
     region_name=REGION,
 )
+
+
+AGENT_SYSTEM_PROMPT = """
+You are a Neptune graph assistant connected to an MCP server.
+
+The MCP server exposes graph tools such as:
+- get_graph_status
+- get_graph_schema
+- run_gremlin_query
+- run_opencypher_query
+
+Rules:
+1. For graph questions, first inspect the graph schema using get_graph_schema.
+2. Use run_gremlin_query or run_opencypher_query to answer the user question.
+3. Do not invent graph contents.
+4. Always mention which query/tool you used.
+5. Keep the answer concise.
+6. If the graph has no matching data, say that clearly.
+"""
 
 
 def flatten_exception(exc):
@@ -37,10 +64,6 @@ def flatten_exception(exc):
 
 
 def serialize_mcp_result(result):
-    """
-    MCP tool results are not always directly JSON serializable.
-    Return both a string version and a structured text extraction when available.
-    """
     output = {
         "raw": str(result),
         "is_error": getattr(result, "isError", None),
@@ -124,6 +147,34 @@ async def run_opencypher_query(query, parameters=None):
     )
 
 
+def run_strands_agent_with_mcp(question):
+    model = BedrockModel(
+        model_id=BEDROCK_MODEL_ID,
+        region_name=REGION,
+    )
+
+    mcp_client = MCPClient(lambda: lambda_function_client(server_params))
+
+    with mcp_client:
+        tools = mcp_client.list_tools_sync()
+
+        agent = Agent(
+            model=model,
+            tools=tools,
+            system_prompt=AGENT_SYSTEM_PROMPT,
+        )
+
+        response = agent(question)
+
+    return {
+        "agent": "strands_agent_with_mcp_tools",
+        "mcp_lambda": FUNCTION_NAME,
+        "model_id": BEDROCK_MODEL_ID,
+        "question": question,
+        "response": str(response),
+    }
+
+
 def lambda_handler(event, context):
     try:
         print("EVENT:")
@@ -201,6 +252,14 @@ def lambda_handler(event, context):
 
             result = asyncio.run(call_mcp_tool(tool_name, arguments))
 
+        elif test_name == "agent_mcp":
+            question = event.get(
+                "question",
+                "What data assets does app_repayment_predictor consume?",
+            )
+
+            result = run_strands_agent_with_mcp(question)
+
         else:
             return {
                 "statusCode": 400,
@@ -214,6 +273,7 @@ def lambda_handler(event, context):
                             "run_gremlin",
                             "run_opencypher",
                             "call_tool",
+                            "agent_mcp",
                         ],
                     }
                 ),
